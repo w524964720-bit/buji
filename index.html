@@ -2,7 +2,14 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="微信聊天">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#e8f8f5">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2381c784' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>💬</text></svg>">
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi5b6u5L+h6IGK5aSpIiwic2hvcnRfbmFtZSI6IuW+ruS/oSIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWwsPHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJz48cmVjdCBmaWxsPSclMjM4MWM3ODQnIHdpZHRoPScxMDAnIGhlaWdodD0nMTAwJyByeD0nMjAnLz48dGV4dCB4PSc1MCcgeT0nNjUnIGZvbnQtc2l6ZT0nNTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz7wn5KsPC90ZXh0Pjwvc3ZnPiIsInNpemVzIjoiMTkyeDE5MiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2U4ZjhmNSIsInRoZW1lX2NvbG9yIjoiIzgxYzc4NCJ9">
     <title>仿微信手机界面 - 角色聊天系统</title>
     <style>
         * {
@@ -809,6 +816,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 15px;
+            padding-bottom: 80px;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -891,10 +899,16 @@
             display: flex;
             align-items: flex-end;
             padding: 10px 15px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
             background: #fff;
             border-top: 1px solid #eee;
             gap: 10px;
             flex-shrink: 0;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
         }
 
         .chat-input {
@@ -1154,6 +1168,42 @@
             0%, 80%, 100% { transform: scale(0); }
             40% { transform: scale(1); }
         }
+
+        /* PWA安装提示 */
+        .pwa-install-prompt {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 9999;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .pwa-install-prompt.show {
+            display: block;
+            animation: slideUpPrompt 0.3s ease-out;
+        }
+
+        @keyframes slideUpPrompt {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        .pwa-install-prompt p {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .pwa-install-prompt .btn-row {
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
@@ -1284,6 +1334,15 @@
 
         <!-- 加载提示 -->
         <div id="loading-toast" class="loading-toast">处理中...</div>
+
+        <!-- PWA安装提示 -->
+        <div id="pwa-install-prompt" class="pwa-install-prompt">
+            <p>📱 将此应用添加到主屏幕，获得更好体验！</p>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="pwa-install-btn">添加到主屏幕</button>
+                <button class="btn btn-secondary" onclick="dismissPWAPrompt()">稍后再说</button>
+            </div>
+        </div>
 
         <!-- ================= 角色列表模态框 ================= -->
         <div id="character-modal" class="modal full-screen">
@@ -1668,7 +1727,16 @@
                         <div id="voice-settings" class="hidden-area">
                             <input type="text" id="voice-group-id" class="form-input" placeholder="Group ID">
                             <input type="password" id="voice-api-key" class="form-input" placeholder="API 密钥">
-                            <input type="text" id="voice-id-input" class="form-input" placeholder="Voice ID">
+                            <div class="btn-row">
+                                <button class="btn btn-primary" onclick="fetchMinimaxVoiceModels()">拉取语音模型</button>
+                                <select id="voice-model-select" class="form-select">
+                                    <option value="">请先拉取模型</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-top: 8px;">
+                                <label class="form-label">Voice ID (可选，用于指定音色)</label>
+                                <input type="text" id="voice-id-input" class="form-input" placeholder="Voice ID">
+                            </div>
                         </div>
                     </div>
 
@@ -1715,11 +1783,14 @@
                 main: { url: '', key: '', model: '' },
                 sub: { url: '', key: '', model: '' },
                 imgGen: false,
-                voice: { enabled: false, groupId: '', key: '', voiceId: '' },
+                voice: { enabled: false, groupId: '', key: '', voiceId: '', model: '' },
                 activeMsg: { enabled: false, time: 60 }
             },
             presets: []
         };
+
+        // PWA相关
+        let deferredPrompt = null;
 
         // 加载数据
         function loadAppData() {
@@ -1747,6 +1818,47 @@
 
         function hideLoading() {
             document.getElementById('loading-toast').classList.remove('show');
+        }
+
+        // ================= PWA安装功能 =================
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // 显示安装提示
+            const prompt = document.getElementById('pwa-install-prompt');
+            if (prompt && !localStorage.getItem('pwa_prompt_dismissed')) {
+                setTimeout(() => {
+                    prompt.classList.add('show');
+                }, 2000);
+            }
+        });
+
+        document.getElementById('pwa-install-btn')?.addEventListener('click', async () => {
+            const prompt = document.getElementById('pwa-install-prompt');
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    console.log('用户已安装PWA');
+                }
+                deferredPrompt = null;
+            } else {
+                // iOS Safari提示
+                alert('请点击浏览器分享按钮 📤，然后选择"添加到主屏幕"');
+            }
+            prompt.classList.remove('show');
+        });
+
+        function dismissPWAPrompt() {
+            document.getElementById('pwa-install-prompt').classList.remove('show');
+            localStorage.setItem('pwa_prompt_dismissed', 'true');
+        }
+
+        // 检测是否已经是PWA模式
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            // 已经是PWA模式，不显示安装提示
+            const prompt = document.getElementById('pwa-install-prompt');
+            if (prompt) prompt.style.display = 'none';
         }
 
         // ================= 工具函数 =================
@@ -2941,6 +3053,110 @@
             }
         }
 
+        // ================= Minimax语音模型拉取 =================
+        async function fetchMinimaxVoiceModels() {
+            const groupId = document.getElementById('voice-group-id').value.trim();
+            const apiKey = document.getElementById('voice-api-key').value.trim();
+            const select = document.getElementById('voice-model-select');
+
+            if (!groupId || !apiKey) {
+                alert('请先填写Group ID和API密钥');
+                return;
+            }
+
+            select.innerHTML = '<option>加载中...</option>';
+            showLoading('正在拉取语音模型...');
+
+            try {
+                // Minimax T2A API - 获取可用的语音模型
+                const response = await fetch(`https://api.minimax.chat/v1/t2a/voices?GroupId=${groupId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    // 如果voices端点不可用，尝试使用预设的模型列表
+                    throw new Error(`请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+                select.innerHTML = '<option value="">选择语音模型</option>';
+
+                if (data.voices && Array.isArray(data.voices) && data.voices.length > 0) {
+                    data.voices.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice.voice_id || voice.id;
+                        option.textContent = voice.name || voice.voice_id || voice.id;
+                        select.appendChild(option);
+                    });
+                    alert(`成功拉取 ${data.voices.length} 个语音模型`);
+                } else if (data.base_resp && data.base_resp.status_code !== 0) {
+                    throw new Error(data.base_resp.status_msg || '获取语音列表失败');
+                } else {
+                    throw new Error('未找到可用语音模型');
+                }
+            } catch (error) {
+                console.error('拉取Minimax语音模型失败:', error);
+                
+                // 使用Minimax官方预设的语音模型作为备选
+                select.innerHTML = '<option value="">选择语音模型</option>';
+                const defaultVoices = [
+                    { id: 'male-qn-qingse', name: '青涩青年音色' },
+                    { id: 'male-qn-jingying', name: '精英青年音色' },
+                    { id: 'male-qn-badao', name: '霸道青年音色' },
+                    { id: 'male-qn-daxuesheng', name: '大学生青年音色' },
+                    { id: 'female-shaonv', name: '少女音色' },
+                    { id: 'female-yujie', name: '御姐音色' },
+                    { id: 'female-chengshu', name: '成熟女性音色' },
+                    { id: 'female-tianmei', name: '甜美女性音色' },
+                    { id: 'presenter_male', name: '男性主持人' },
+                    { id: 'presenter_female', name: '女性主持人' },
+                    { id: 'audiobook_male_1', name: '男性有声书1' },
+                    { id: 'audiobook_male_2', name: '男性有声书2' },
+                    { id: 'audiobook_female_1', name: '女性有声书1' },
+                    { id: 'audiobook_female_2', name: '女性有声书2' },
+                    { id: 'male-qn-qingse-jingpin', name: '青涩青年音色-精品' },
+                    { id: 'male-qn-jingying-jingpin', name: '精英青年音色-精品' },
+                    { id: 'male-qn-badao-jingpin', name: '霸道青年音色-精品' },
+                    { id: 'male-qn-daxuesheng-jingpin', name: '大学生青年音色-精品' },
+                    { id: 'female-shaonv-jingpin', name: '少女音色-精品' },
+                    { id: 'female-yujie-jingpin', name: '御姐音色-精品' },
+                    { id: 'female-chengshu-jingpin', name: '成熟女性音色-精品' },
+                    { id: 'female-tianmei-jingpin', name: '甜美女性音色-精品' },
+                    { id: 'smart_robot', name: '智能机器人' },
+                    { id: 'wise_grandmother', name: '慈祥老奶奶' },
+                    { id: 'friendly_oldman', name: '和蔼老爷爷' },
+                    { id: 'lovely_boy', name: '可爱男孩' },
+                    { id: 'cute_girl', name: '可爱女孩' },
+                    { id: 'cartoon_pig', name: '卡通小猪' },
+                    { id: 'bingjiao_didi', name: '病娇弟弟' },
+                    { id: 'junlang_nanyou', name: '俊朗男友' },
+                    { id: 'chunzhen_xuedi', name: '淳真学弟' },
+                    { id: 'lengdan_xiongzhang', name: '冷淡兄长' },
+                    { id: 'badao_shaoye', name: '霸道少爷' },
+                    { id: 'tianxin_xiaoling', name: '甜心小玲' },
+                    { id: 'qiaopi_mengmei', name: '俏皮萌妹' },
+                    { id: 'wumei_yujie', name: '妩媚御姐' },
+                    { id: 'diadia_xuemei', name: '嗲嗲学妹' },
+                    { id: 'danya_xuejie', name: '淡雅学姐' }
+                ];
+
+                defaultVoices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    select.appendChild(option);
+                });
+
+                alert('无法从API获取语音列表，已加载预设的' + defaultVoices.length + '个标准语音模型');
+            } finally {
+                hideLoading();
+            }
+        }
+
         function savePreset() {
             const url = document.getElementById('main-api-url').value;
             const key = document.getElementById('main-api-key').value;
@@ -3021,6 +3237,7 @@
                     enabled: document.getElementById('voice-switch').checked,
                     groupId: document.getElementById('voice-group-id').value,
                     key: document.getElementById('voice-api-key').value,
+                    model: document.getElementById('voice-model-select').value,
                     voiceId: document.getElementById('voice-id-input').value
                 },
                 activeMsg: {
@@ -3063,6 +3280,10 @@
                 document.getElementById('voice-group-id').value = settings.voice.groupId || '';
                 document.getElementById('voice-api-key').value = settings.voice.key || '';
                 document.getElementById('voice-id-input').value = settings.voice.voiceId || '';
+                const voiceSelect = document.getElementById('voice-model-select');
+                if (settings.voice.model) {
+                    voiceSelect.innerHTML = `<option value="${settings.voice.model}" selected>${settings.voice.model}</option>`;
+                }
             }
 
             if (settings.activeMsg) {
