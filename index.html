@@ -12,7 +12,11 @@
     <link rel="apple-touch-icon" href="icon.svg">
     <link rel="manifest" href="manifest.json">
     <title>仿微信手机界面 - 角色聊天系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <style>
+        :root {
+            --custom-font: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
         * {
             margin: 0;
             padding: 0;
@@ -32,7 +36,7 @@
             min-height: -webkit-fill-available;
             min-height: 100dvh;
             background: linear-gradient(160deg, #e8f8f5 0%, #d5f5e3 25%, #abebc6 50%, #d5f5e3 75%, #e8f8f5 100%);
-            font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: var(--custom-font);
             display: flex;
             justify-content: center;
         }
@@ -1587,6 +1591,152 @@
         .popup-overlay.show {
             display: block;
         }
+
+        /* ================= 表情面板样式 ================= */
+        .emoji-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 40%;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .emoji-panel.show {
+            transform: translateY(0);
+        }
+
+        .emoji-header {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .emoji-tabs {
+            display: flex;
+            gap: 15px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .emoji-tab {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .emoji-tab.active {
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        .emoji-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            align-content: start;
+        }
+
+        .emoji-item {
+            aspect-ratio: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .emoji-item:hover {
+            background: #f5f5f5;
+        }
+
+        .emoji-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* ================= 消息长按菜单 ================= */
+        .message-menu {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 8px;
+            padding: 5px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.2s;
+        }
+
+        .message-menu-item {
+            color: white;
+            font-size: 12px;
+            padding: 5px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .message-menu-item:active {
+            opacity: 0.7;
+        }
+
+        /* ================= 多选框样式 ================= */
+        .checkbox-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            background: #fff;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .checkbox-item:hover {
+            background: #f5f5f5;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #81c784;
+        }
+
+        .checkbox-label {
+            font-size: 13px;
+            color: #333;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -1945,11 +2095,18 @@
 
                     <!-- 关联世界书 -->
                     <div class="setting-section">
-                        <h3>📚 关联世界书</h3>
-                        <div class="btn-row">
-                            <select id="char-worldbook" class="form-select" onchange="updateTokensEstimate()">
-                                <option value="">不关联世界书</option>
-                            </select>
+                        <h3>📚 关联世界书 (多选)</h3>
+                        <div id="char-worldbook-list" class="checkbox-list">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 高级设定 -->
+                    <div class="setting-section">
+                        <h3>⚙️ 高级设定</h3>
+                        <div class="form-group">
+                            <label class="form-label">底层提示词 (追加到 System Prompt 末尾)</label>
+                            <textarea id="char-post-history-instructions" class="form-textarea" rows="3" placeholder="例如：请始终保持高冷语气..."></textarea>
                         </div>
                     </div>
 
@@ -2108,8 +2265,10 @@
                         <!-- 消息将在这里动态生成 -->
                     </div>
                     <div class="chat-input-area" id="chat-input-area">
+                        <button class="chat-btn" onclick="toggleEmojiPanel()" style="color: #666; font-size: 20px; margin-right: 5px;">＋</button>
                         <textarea class="chat-input" id="chat-input" placeholder="输入消息..." rows="1" oninput="autoResize(this)"></textarea>
                         <button class="chat-btn star-btn" id="ai-reply-btn" onclick="triggerAIReply()" title="让AI回复">✦</button>
+                        <button class="chat-btn" id="retry-btn" onclick="retryLastMessage()" title="重试" style="display: none; background: #ffb74d; color: white; font-size: 14px;">↻</button>
                         <button class="chat-btn send-btn" onclick="sendMessage()" title="发送消息">➤</button>
                     </div>
                 </div>
@@ -2310,6 +2469,15 @@
                     </div>
                 </div>
                 <div class="modal-body">
+                    <!-- 全局字体 -->
+                    <div class="setting-section">
+                        <h3>Aa 全局字体</h3>
+                        <div class="form-group">
+                            <label class="form-label">字体名称 (系统字体或已安装字体)</label>
+                            <input type="text" id="custom-font-input" class="form-input" placeholder="例如: KaiTi, SimHei, 'Courier New'" onchange="applyCustomFont(this.value)">
+                        </div>
+                    </div>
+
                     <!-- 主屏幕头像 -->
                     <div class="setting-section">
                         <h3>🖼️ 主屏幕头像</h3>
@@ -2355,7 +2523,7 @@
 
         <!-- 隐藏的文件输入 -->
         <input type="file" id="character-import-input" class="hidden-input" accept=".json,.png" onchange="importCharacter(event)">
-        <input type="file" id="worldbook-import-input" class="hidden-input" accept=".json,.txt" onchange="importWorldbook(event)">
+        <input type="file" id="worldbook-import-input" class="hidden-input" accept=".json,.txt,.docx" onchange="importWorldbook(event)">
         <input type="file" id="char-avatar-input" class="hidden-input" accept="image/*" onchange="uploadAvatar(event, 'char')">
         <input type="file" id="user-avatar-input" class="hidden-input" accept="image/*" onchange="uploadAvatar(event, 'user')">
         <input type="file" id="chat-bg-input" class="hidden-input" accept="image/*" onchange="uploadChatBg(event)">
@@ -2366,6 +2534,51 @@
         
         <!-- 隐藏的音频播放器 -->
         <audio id="voice-player" style="display:none;"></audio>
+
+        <!-- 表情面板 -->
+        <div id="emoji-panel" class="emoji-panel">
+            <div class="emoji-header">
+                <div class="emoji-tabs" id="emoji-tabs">
+                    <div class="emoji-tab active" onclick="switchEmojiTab('emoji')">Emoji</div>
+                    <div class="emoji-tab" onclick="switchEmojiTab('custom')">表情包</div>
+                    <div class="emoji-tab" onclick="document.getElementById('emoji-import-input').click()">+ 导入</div>
+                </div>
+                <span onclick="toggleEmojiPanel()" style="padding: 5px; cursor: pointer;">↓</span>
+            </div>
+            <div class="emoji-content" id="emoji-content">
+                <!-- 表情内容动态生成 -->
+            </div>
+        </div>
+
+        <!-- 表情包导入弹窗 -->
+        <div id="emoji-import-modal" class="modal">
+            <div class="modal-content" style="height: auto;">
+                <div class="modal-header">
+                    <h2>导入表情包</h2>
+                    <span class="close-btn" onclick="closeModal('emoji-import-modal')">×</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">表情包名称</label>
+                        <input type="text" id="emoji-pack-name" class="form-input" placeholder="例如: 喵喵表情">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">选择图片 (支持多选)</label>
+                        <div class="btn-row">
+                            <button class="btn btn-secondary" onclick="document.getElementById('emoji-files-input').click()">选择图片...</button>
+                            <span id="emoji-files-count" style="font-size: 12px; color: #666; align-self: center;">未选择</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="save-all-btn" onclick="saveEmojiPack()">导入</button>
+                </div>
+            </div>
+        </div>
+
+        <input type="file" id="emoji-import-input" class="hidden-input" accept=".json" onchange="importEmojiConfig(event)">
+        <input type="file" id="emoji-files-input" class="hidden-input" accept="image/*" multiple onchange="handleEmojiFilesSelect(event)">
+        <input type="file" id="file-upload-input" class="hidden-input" accept=".txt,.docx,.pdf" onchange="handleFileUpload(event)">
     </div>
 
     <script>
@@ -2420,7 +2633,8 @@
                 mainAvatar: '',
                 mainBg: '',
                 icons: {}
-            }
+            },
+            emojiLibrary: []
         };
 
         // PWA相关
@@ -2430,6 +2644,10 @@
         let longPressTimer = null;
         let longPressCharId = null;
         let isLongPress = false;
+
+        // 消息长按相关
+        let messageLongPressTimer = null;
+        let isMessageLongPress = false;
 
         // 当前编辑的图标
         let currentEditingIcon = null;
@@ -2450,12 +2668,18 @@
                     if (!appData.appearance) {
                         appData.appearance = { mainAvatar: '', mainBg: '', icons: {} };
                     }
+                    if (!appData.emojiLibrary) appData.emojiLibrary = [];
+                    if (!appData.fontSettings) appData.fontSettings = {};
                 } catch (e) {
                     console.error('数据加载失败', e);
                 }
             }
             // 应用外观设置
             applyAppearanceSettings();
+            // 应用字体设置
+            if (appData.fontSettings && appData.fontSettings.customFont) {
+                applyCustomFont(appData.fontSettings.customFont);
+            }
         }
 
         // 保存数据
@@ -2503,6 +2727,7 @@
 
         function openAppearanceSettings() {
             // 加载当前设置到表单
+            document.getElementById('custom-font-input').value = (appData.fontSettings && appData.fontSettings.customFont) || '';
             document.getElementById('main-avatar-preview').src = appData.appearance.mainAvatar || 'https://api.dicebear.com/7.x/lorelei/png?seed=cute&backgroundColor=d1fae5';
             document.getElementById('main-avatar-url').value = appData.appearance.mainAvatar || '';
             
@@ -2671,6 +2896,182 @@
             closeModal('appearance-modal');
         }
 
+        // ================= 表情包功能 =================
+        let currentEmojiTab = 'emoji';
+        let tempEmojiFiles = [];
+
+        function toggleEmojiPanel() {
+            const panel = document.getElementById('emoji-panel');
+            const isShowing = panel.classList.contains('show');
+            
+            if (isShowing) {
+                panel.classList.remove('show');
+            } else {
+                panel.classList.add('show');
+                if (document.getElementById('emoji-content').innerHTML.trim() === '') {
+                    switchEmojiTab('emoji');
+                }
+            }
+        }
+
+        function switchEmojiTab(tab) {
+            currentEmojiTab = tab;
+            document.querySelectorAll('.emoji-tab').forEach(el => el.classList.remove('active'));
+            
+            if (tab === 'emoji') {
+                document.querySelector('.emoji-tab:nth-child(1)').classList.add('active');
+                renderEmojiList();
+            } else if (tab === 'custom') {
+                document.querySelector('.emoji-tab:nth-child(2)').classList.add('active');
+                renderCustomEmojiList();
+            }
+        }
+
+        function renderEmojiList() {
+            const container = document.getElementById('emoji-content');
+            const emojis = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👹','👺','🤡','💩','👻','💀','☠️','👽','👾','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾'];
+            
+            container.innerHTML = emojis.map(emoji => 
+                `<div class="emoji-item" onclick="insertEmoji('${emoji}')">${emoji}</div>`
+            ).join('');
+        }
+
+        function renderCustomEmojiList() {
+            const container = document.getElementById('emoji-content');
+            
+            if (!appData.emojiLibrary || appData.emojiLibrary.length === 0) {
+                container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #999;">暂无表情包<br>点击 "+ 导入" 添加</div>';
+                return;
+            }
+            
+            let allEmojis = [];
+            appData.emojiLibrary.forEach(pack => {
+                if (pack.images && pack.images.length > 0) {
+                    allEmojis = allEmojis.concat(pack.images);
+                }
+            });
+
+            if (allEmojis.length === 0) {
+                container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #999;">表情包为空</div>';
+                return;
+            }
+
+            container.innerHTML = allEmojis.map(img => 
+                `<div class="emoji-item" onclick="sendImageEmoji('${img}')"><img src="${img}"></div>`
+            ).join('');
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById('chat-input');
+            input.value += emoji;
+            input.focus();
+        }
+
+        function sendImageEmoji(imgSrc) {
+            const content = `[img]${imgSrc}[/img]`;
+            const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+            if (!char) return;
+            
+            if (!char.chatHistory) char.chatHistory = [];
+            char.chatHistory.push({
+                role: 'user',
+                content: content,
+                time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+            });
+            
+            saveAppData();
+            renderChatMessages(char);
+            toggleEmojiPanel();
+        }
+
+        function importEmojiConfig(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.name && data.images) {
+                        if (!appData.emojiLibrary) appData.emojiLibrary = [];
+                        appData.emojiLibrary.push(data);
+                        saveAppData();
+                        alert(`表情包 "${data.name}" 导入成功！`);
+                        if (currentEmojiTab === 'custom') renderCustomEmojiList();
+                    } else {
+                        alert('无效的表情包配置文件');
+                    }
+                } catch (err) {
+                    alert('导入失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function handleEmojiFilesSelect(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+            
+            tempEmojiFiles = files;
+            document.getElementById('emoji-files-count').textContent = `已选择 ${files.length} 张图片`;
+            openModal('emoji-import-modal');
+        }
+
+        async function saveEmojiPack() {
+            const name = document.getElementById('emoji-pack-name').value.trim();
+            if (!name) {
+                alert('请输入表情包名称');
+                return;
+            }
+            
+            if (tempEmojiFiles.length === 0) {
+                alert('请选择图片');
+                return;
+            }
+            
+            showLoading('正在处理图片...');
+            
+            try {
+                const images = [];
+                for (const file of tempEmojiFiles) {
+                    const dataUrl = await fileToDataURL(file);
+                    images.push(dataUrl);
+                }
+                
+                if (!appData.emojiLibrary) appData.emojiLibrary = [];
+                appData.emojiLibrary.push({
+                    id: generateId(),
+                    name: name,
+                    images: images
+                });
+                
+                saveAppData();
+                alert('表情包导入成功！');
+                closeModal('emoji-import-modal');
+                
+                document.getElementById('emoji-pack-name').value = '';
+                document.getElementById('emoji-files-count').textContent = '未选择';
+                tempEmojiFiles = [];
+                
+                if (currentEmojiTab === 'custom') renderCustomEmojiList();
+                
+            } catch (e) {
+                alert('保存失败，可能是图片总大小超过了浏览器存储限制。');
+                console.error(e);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function applyCustomFont(fontName) {
+            if (!fontName) return;
+            document.documentElement.style.setProperty('--custom-font', `"${fontName}", 'PingFang SC', 'Microsoft YaHei', sans-serif`);
+            if (!appData.fontSettings) appData.fontSettings = {};
+            appData.fontSettings.customFont = fontName;
+            saveAppData();
+        }
+
         // ================= 移动端键盘适配 (Visual Viewport API) =================
         function setupKeyboardHandling() {
             const chatMessages = document.getElementById('chat-messages');
@@ -2737,6 +3138,36 @@
         }
 
         // ================= 工具函数 =================
+        async function readTextFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const buffer = e.target.result;
+                        const decoder = new TextDecoder('utf-8', { fatal: true });
+                        resolve(decoder.decode(buffer));
+                    } catch (err) {
+                        try {
+                            const buffer = e.target.result;
+                            const decoder = new TextDecoder('gbk');
+                            resolve(decoder.decode(buffer));
+                        } catch (err2) {
+                            resolve(new TextDecoder('utf-8').decode(e.target.result));
+                        }
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function parseDocx(file) {
+            if (!window.mammoth) return "Error: mammoth.js not loaded";
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            return result.value;
+        }
+
         function updateTime() {
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
@@ -2778,18 +3209,20 @@
         function updateTokensEstimate() {
             const charPersona = document.getElementById('char-persona')?.value || '';
             const userPersona = document.getElementById('user-persona')?.value || '';
-            const worldbookId = document.getElementById('char-worldbook')?.value;
             
             let totalTokens = estimateTokens(charPersona) + estimateTokens(userPersona);
             
-            if (worldbookId) {
-                const wb = appData.worldbooks.find(w => w.id === worldbookId);
+            // 计算选中的世界书
+            const selectedWbs = Array.from(document.querySelectorAll('input[name="char-worldbook-select"]:checked')).map(cb => cb.value);
+            
+            selectedWbs.forEach(wbId => {
+                const wb = appData.worldbooks.find(w => w.id === wbId);
                 if (wb && wb.entries) {
                     wb.entries.forEach(e => {
                         totalTokens += estimateTokens(e.content);
                     });
                 }
-            }
+            });
             
             const el = document.getElementById('tokens-estimate');
             if (el) el.textContent = totalTokens;
@@ -2897,6 +3330,156 @@
             isLongPress = false;
         }
 
+        // ================= 消息长按处理 =================
+        function handleMessageTouchStart(event, index) {
+            isMessageLongPress = false;
+            messageLongPressTimer = setTimeout(() => {
+                isMessageLongPress = true;
+                if (navigator.vibrate) navigator.vibrate(50);
+                showMessageMenu(event, index);
+            }, 600);
+        }
+
+        function handleMessageTouchEnd(event) {
+            clearTimeout(messageLongPressTimer);
+        }
+
+        function handleMessageTouchMove(event) {
+            clearTimeout(messageLongPressTimer);
+        }
+
+        function handleMessageMouseDown(event, index) {
+            if (event.button !== 0) return; // 仅左键
+            isMessageLongPress = false;
+            messageLongPressTimer = setTimeout(() => {
+                isMessageLongPress = true;
+                showMessageMenu(event, index);
+            }, 600);
+        }
+
+        function handleMessageMouseUp(event) {
+            clearTimeout(messageLongPressTimer);
+        }
+
+        function showMessageMenu(event, index) {
+            closeMessageMenu();
+            
+            const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+            if (!char || !char.chatHistory[index]) return;
+            
+            const msg = char.chatHistory[index];
+            const isLast = index === char.chatHistory.length - 1;
+            
+            const menu = document.createElement('div');
+            menu.className = 'message-menu';
+            
+            // 复制
+            const copyBtn = document.createElement('div');
+            copyBtn.className = 'message-menu-item';
+            copyBtn.textContent = '复制';
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(msg.content);
+                closeMessageMenu();
+            };
+            menu.appendChild(copyBtn);
+            
+            // 删除
+            const deleteBtn = document.createElement('div');
+            deleteBtn.className = 'message-menu-item';
+            deleteBtn.textContent = '删除';
+            deleteBtn.onclick = () => {
+                deleteMessage(index);
+                closeMessageMenu();
+            };
+            menu.appendChild(deleteBtn);
+            
+            // 重试 (仅最后一条 AI 消息)
+            if (msg.role === 'ai' && isLast) {
+                const retryBtn = document.createElement('div');
+                retryBtn.className = 'message-menu-item';
+                retryBtn.textContent = '重试';
+                retryBtn.onclick = () => {
+                    retryLastMessage();
+                    closeMessageMenu();
+                };
+                menu.appendChild(retryBtn);
+            }
+            
+            // 编辑
+            const editBtn = document.createElement('div');
+            editBtn.className = 'message-menu-item';
+            editBtn.textContent = '编辑';
+            editBtn.onclick = () => {
+                editMessage(index);
+                closeMessageMenu();
+            };
+            menu.appendChild(editBtn);
+
+            // 定位
+            let clientX, clientY;
+            if (event.touches && event.touches.length > 0) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            
+            menu.style.left = Math.min(clientX, window.innerWidth - 150) + 'px';
+            menu.style.top = (clientY - 40) + 'px';
+            
+            document.body.appendChild(menu);
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMessageMenu, { once: true });
+            }, 0);
+        }
+
+        function closeMessageMenu() {
+            const menu = document.querySelector('.message-menu');
+            if (menu) menu.remove();
+        }
+
+        function deleteMessage(index) {
+            const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+            if (!char) return;
+            
+            if (confirm('确定删除这条消息吗？')) {
+                char.chatHistory.splice(index, 1);
+                saveAppData();
+                renderChatMessages(char);
+            }
+        }
+
+        function retryLastMessage() {
+            const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+            if (!char || char.chatHistory.length === 0) return;
+            
+            const lastMsg = char.chatHistory[char.chatHistory.length - 1];
+            if (lastMsg.role === 'ai') {
+                char.chatHistory.pop();
+                saveAppData();
+                renderChatMessages(char);
+                triggerAIReply();
+            } else {
+                triggerAIReply();
+            }
+        }
+
+        function editMessage(index) {
+            const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+            if (!char) return;
+            
+            const msg = char.chatHistory[index];
+            const newContent = prompt('编辑消息:', msg.content);
+            
+            if (newContent !== null && newContent.trim() !== '') {
+                msg.content = newContent;
+                saveAppData();
+                renderChatMessages(char);
+            }
+        }
+
         function openChatWithCharacter(charId) {
             const char = appData.characters.find(c => c.id === charId);
             if (!char) return;
@@ -2958,6 +3541,8 @@
                 userNickname: '',
                 userPersona: '',
                 worldbookId: '',
+                worldbookIds: [],
+                postHistoryInstructions: '',
                 memoryCount: 50,
                 autoSummary: false,
                 summaryInterval: 100,
@@ -2997,11 +3582,24 @@
             document.getElementById('user-name').value = char.userName || '';
             document.getElementById('user-persona').value = char.userPersona || '';
             
-            const wbSelect = document.getElementById('char-worldbook');
-            wbSelect.innerHTML = '<option value="">不关联世界书</option>' + 
-                appData.worldbooks.map(wb => `<option value="${wb.id}">${wb.name}</option>`).join('');
-            wbSelect.value = char.worldbookId || '';
+            // 世界书多选渲染
+            const wbList = document.getElementById('char-worldbook-list');
+            if (appData.worldbooks.length === 0) {
+                wbList.innerHTML = '<div style="padding:10px; color:#999; font-size:12px; text-align:center;">暂无世界书</div>';
+            } else {
+                wbList.innerHTML = appData.worldbooks.map(wb => {
+                    // 兼容旧的 single ID 和新的 array IDs
+                    const isChecked = (char.worldbookIds && char.worldbookIds.includes(wb.id)) || (char.worldbookId === wb.id);
+                    return `
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="char-worldbook-select" value="${wb.id}" ${isChecked ? 'checked' : ''} onchange="updateTokensEstimate()">
+                            <span class="checkbox-label">${wb.name}</span>
+                        </label>
+                    `;
+                }).join('');
+            }
             
+            document.getElementById('char-post-history-instructions').value = char.postHistoryInstructions || '';
             document.getElementById('memory-count').value = char.memoryCount || 50;
             
             document.getElementById('auto-summary-switch').checked = char.autoSummary || false;
@@ -3181,7 +3779,7 @@
                 if (file.name.toLowerCase().endsWith('.png')) {
                     await importPNGCharacter(file);
                 } else if (file.name.toLowerCase().endsWith('.json')) {
-                    const text = await file.text();
+                    const text = await readTextFile(file);
                     const data = JSON.parse(text);
                     await processCharacterData(data, file.name);
                 }
@@ -3522,19 +4120,50 @@
             if (!file) return;
             showLoading('正在导入世界书...');
             try {
-                const text = await file.text();
-                let data;
-                if (file.name.toLowerCase().endsWith('.json')) {
-                    data = JSON.parse(text);
+                let text = '';
+                if (file.name.toLowerCase().endsWith('.docx')) {
+                    text = await parseDocx(file);
                 } else {
-                    const lines = text.split('\n').filter(l => l.trim());
-                    data = { entries: lines.map(line => { const parts = line.split('|'); return { keywords: parts[0]?.trim() || '', content: parts.slice(1).join('|').trim() || parts[0]?.trim() }; }) };
+                    text = await readTextFile(file);
                 }
-                await importWorldbookData(data, file.name.replace(/\.(json|txt)$/i, ''));
+
+                let data;
+                try {
+                    data = JSON.parse(text);
+                    if (!data.entries && !data.data && !Array.isArray(data)) {
+                        throw new Error('Not JSON structure');
+                    }
+                } catch (e) {
+                    const lines = text.split('\n').filter(l => l.trim());
+                    data = { 
+                        entries: lines.map(line => { 
+                            let parts = line.split('|');
+                            if (parts.length < 2) parts = line.split(/[:：]/);
+                            
+                            if (parts.length >= 2) {
+                                return { 
+                                    keywords: parts[0].trim(), 
+                                    content: parts.slice(1).join('|').trim() 
+                                };
+                            } else {
+                                return { 
+                                    keywords: '', 
+                                    content: line.trim() 
+                                };
+                            }
+                        }).filter(e => e.content)
+                    };
+                }
+                
+                await importWorldbookData(data, file.name.replace(/\.(json|txt|docx)$/i, ''));
                 renderWorldbookList();
                 alert('世界书导入成功！');
-            } catch (e) { alert('导入失败: ' + e.message); }
-            finally { hideLoading(); }
+            } catch (e) { 
+                console.error(e);
+                alert('导入失败: ' + e.message); 
+            } finally { 
+                hideLoading(); 
+            }
             event.target.value = '';
         }
 
@@ -3608,26 +4237,77 @@
             document.getElementById('chat-status').textContent = '正在输入...';
             
             const messagesContainer = document.getElementById('chat-messages');
-            messagesContainer.insertAdjacentHTML('beforeend', `<div class="message ai" id="typing-message"><div class="message-avatar"><img src="${char.avatar || 'https://api.dicebear.com/7.x/lorelei/png?seed=' + char.id}" alt="AI"></div><div class="typing-indicator"><span></span><span></span><span></span></div></div>`);
+            const typingId = 'typing-' + Date.now();
+            messagesContainer.insertAdjacentHTML('beforeend', `<div class="message ai" id="${typingId}"><div class="message-avatar"><img src="${char.avatar || 'https://api.dicebear.com/7.x/lorelei/png?seed=' + char.id}" alt="AI"></div><div class="typing-indicator"><span></span><span></span><span></span></div></div>`);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             
             try {
                 const messages = buildPromptMessages(char);
                 const temperature = parseFloat(apiSettings.main.temperature) || 0.8;
                 const response = await callAPI(apiSettings.main, messages, char.offlineMode ? char.offlineLength : null, temperature);
-                document.getElementById('typing-message')?.remove();
+                
+                document.getElementById(typingId)?.remove();
                 
                 if (response) {
                     const voiceEnabled = apiSettings.voice.enabled;
                     const voiceProbability = apiSettings.voice.probability || 30;
                     const shouldBeVoice = voiceEnabled && Math.random() * 100 < voiceProbability;
                     
-                    char.chatHistory.push({ role: 'ai', content: response, time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }), isVoice: shouldBeVoice, voiceData: '', voiceDuration: shouldBeVoice ? Math.floor(response.length / 10) + '"' : '' });
-                    saveAppData();
-                    renderChatMessages(char);
+                    if (shouldBeVoice) {
+                        char.chatHistory.push({ role: 'ai', content: response, time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }), isVoice: shouldBeVoice, voiceData: '', voiceDuration: shouldBeVoice ? Math.floor(response.length / 10) + '"' : '' });
+                        saveAppData();
+                        renderChatMessages(char);
+                    } else {
+                        await typeWriterEffect(char, response);
+                    }
                 }
-            } catch (e) { document.getElementById('typing-message')?.remove(); alert('AI回复失败: ' + e.message); }
-            finally { btn.classList.remove('loading'); document.getElementById('chat-status').textContent = '在线'; }
+            } catch (e) { 
+                document.getElementById(typingId)?.remove(); 
+                alert('AI回复失败: ' + e.message); 
+            }
+            finally { 
+                btn.classList.remove('loading'); 
+                document.getElementById('chat-status').textContent = '在线'; 
+            }
+        }
+
+        function typeWriterEffect(char, text) {
+            return new Promise((resolve) => {
+                const messagesContainer = document.getElementById('chat-messages');
+                const charAvatar = char.avatar || 'https://api.dicebear.com/7.x/lorelei/png?seed=' + char.id;
+                const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                
+                const msgId = 'msg-' + Date.now();
+                const msgHtml = `
+                    <div class="message ai" id="${msgId}">
+                        <div class="message-avatar"><img src="${charAvatar}" alt="AI"></div>
+                        <div class="message-content">
+                            <div class="message-bubble"></div>
+                            <div class="message-time">${timeStr}</div>
+                        </div>
+                    </div>
+                `;
+                messagesContainer.insertAdjacentHTML('beforeend', msgHtml);
+                const bubble = document.querySelector(`#${msgId} .message-bubble`);
+                
+                let i = 0;
+                const speed = 20; 
+                
+                function type() {
+                    if (i < text.length) {
+                        const chunk = text.substring(i, i + 3); // 每次3个字符，稍微快一点
+                        i += 3;
+                        bubble.innerHTML = escapeHtml(text.substring(0, i));
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        setTimeout(type, speed);
+                    } else {
+                        char.chatHistory.push({ role: 'ai', content: text, time: timeStr });
+                        saveAppData();
+                        resolve();
+                    }
+                }
+                type();
+            });
         }
 
         async function playVoiceMessage(voiceData, bubbleElement) {
@@ -3671,6 +4351,7 @@
             if (char.weatherAware && char.weather) systemPrompt += `【当前天气】${char.weather}\n`;
             if (char.offlineMode) systemPrompt += `\n【输出要求】请以长文形式详细回复，字数约${char.offlineLength}字，包含丰富的细节描写。\n`;
             if (char.exampleDialogue) systemPrompt += `\n【对话风格参考】\n${char.exampleDialogue}\n`;
+            if (char.postHistoryInstructions) systemPrompt += `\n${char.postHistoryInstructions}\n`;
             messages.push({ role: 'system', content: systemPrompt });
             if (char.firstMessage && (!char.chatHistory || char.chatHistory.length === 0)) messages.push({ role: 'assistant', content: char.firstMessage });
             const historyLimit = char.memoryCount || 50;
@@ -3728,20 +4409,32 @@
             URL.revokeObjectURL(url);
         }
 
-        function importChatHistory(event) {
+        async function importChatHistory(event) {
             const file = event.target.files[0];
             if (!file) return;
             const char = appData.characters.find(c => c.id === appData.currentCharacterId);
             if (!char) return;
-            file.text().then(text => {
-                try {
-                    const data = JSON.parse(text);
-                    if (data.chatHistory) { if (confirm('是否覆盖当前聊天记录？')) char.chatHistory = data.chatHistory; else char.chatHistory = [...(char.chatHistory || []), ...data.chatHistory]; }
-                    if (data.summaries) char.summaries = [...(char.summaries || []), ...data.summaries];
-                    saveAppData();
-                    alert('聊天记录导入成功！');
-                } catch (e) { alert('导入失败: ' + e.message); }
-            });
+            
+            showLoading('正在导入聊天记录...');
+            try {
+                const text = await readTextFile(file);
+                const data = JSON.parse(text);
+                if (data.chatHistory) { 
+                    if (confirm('是否覆盖当前聊天记录？\n点击"确定"覆盖，点击"取消"追加。')) {
+                        char.chatHistory = data.chatHistory; 
+                    } else {
+                        char.chatHistory = [...(char.chatHistory || []), ...data.chatHistory]; 
+                    }
+                }
+                if (data.summaries) char.summaries = [...(char.summaries || []), ...data.summaries];
+                saveAppData();
+                renderChatMessages(char);
+                alert('聊天记录导入成功！');
+            } catch (e) { 
+                alert('导入失败: ' + e.message); 
+            } finally {
+                hideLoading();
+            }
             event.target.value = '';
         }
 
