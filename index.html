@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="微信聊天">
+    <meta name="apple-mobile-web-app-title" content="仿App小手机">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#e8f8f5">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2381c784' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>💬</text></svg>">
-    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi5b6u5L+h6IGK5aSpIiwic2hvcnRfbmFtZSI6IuW+ruS/oSIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWwsPHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJz48cmVjdCBmaWxsPSclMjM4MWM3ODQnIHdpZHRoPScxMDAnIGhlaWdodD0nMTAwJyByeD0nMjAnLz48dGV4dCB4PSc1MCcgeT0nNjUnIGZvbnQtc2l6ZT0nNTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz7wn5KsPC90ZXh0Pjwvc3ZnPiIsInNpemVzIjoiMTkyeDE5MiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2U4ZjhmNSIsInRoZW1lX2NvbG9yIjoiIzgxYzc4NCJ9">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="manifest" href="manifest.json">
     <title>仿微信手机界面 - 角色聊天系统</title>
     <style>
         * {
@@ -1689,11 +1690,7 @@
                             <text x="12" y="58" font-family="Comic Sans MS, cursive" font-size="22" fill="#5d8a66" transform="rotate(-8 20 50)">A</text>
                             <text x="35" y="62" font-family="Comic Sans MS, cursive" font-size="22" fill="#5d8a66" transform="rotate(5 45 55)">P</text>
                             <text x="58" y="55" font-family="Comic Sans MS, cursive" font-size="22" fill="#5d8a66" transform="rotate(-3 65 50)">I</text>
-                            <path d="M75 35 Q80 30 85 35 Q90 40 85 45 Q80 50 75 45 Q70 40 75 35" stroke="#ffb74d" stroke-width="2" fill="#fff59d"/>
-                            <circle cx="20" cy="30" r="4" fill="#81c784"/>
-                            <circle cx="80" cy="65" r="3" fill="#81c784"/>
-                            <path d="M25 70 L35 75" stroke="#5d8a66" stroke-width="1.5" stroke-linecap="round"/>
-                            <path d="M30 73 L32 68" stroke="#5d8a66" stroke-width="1.5" stroke-linecap="round"/>
+                            <path d="M75 35 Q80 30 85 35 Q90 40 85 45 Q80 50 75 45 Q70 40 75 35" stroke="#ffb74d" stroke-width="2" fill="#fff59d"/><circle cx="20" cy="30" r="4" fill="#81c784"/><circle cx="80" cy="65" r="3" fill="#81c784"/><path d="M25 70 L35 75" stroke="#5d8a66" stroke-width="1.5" stroke-linecap="round"/><path d="M30 73 L32 68" stroke="#5d8a66" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>
                     </div>
                     <span class="app-name">API设置</span>
@@ -2402,6 +2399,9 @@
         };
 
         // ================= 全局数据存储 =================
+        let isCreatingNewCharacter = false;
+        let tempNewCharacter = null;
+
         let appData = {
             characters: [],
             worldbooks: [],
@@ -2671,45 +2671,32 @@
             closeModal('appearance-modal');
         }
 
-        // ================= 移动端键盘适配 =================
+        // ================= 移动端键盘适配 (Visual Viewport API) =================
         function setupKeyboardHandling() {
-            const chatInput = document.getElementById('chat-input');
-            const chatInputArea = document.getElementById('chat-input-area');
             const chatMessages = document.getElementById('chat-messages');
+            const chatModal = document.getElementById('chat-modal');
+            const chatModalContent = chatModal ? chatModal.querySelector('.modal-content') : null;
             
-            if (!chatInput || !chatInputArea) return;
+            if (!chatMessages || !chatModalContent) return;
             
             if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', () => {
-                    if (document.getElementById('chat-modal').style.display === 'flex') {
-                        const viewportHeight = window.visualViewport.height;
-                        const windowHeight = window.innerHeight;
-                        const keyboardHeight = windowHeight - viewportHeight;
+                const handleResize = () => {
+                    if (chatModal.style.display === 'flex') {
+                        // 直接设置内容高度为可视视口高度
+                        // 这样 flex 布局会自动调整，输入框会贴在键盘上方
+                        chatModalContent.style.height = window.visualViewport.height + 'px';
                         
-                        if (keyboardHeight > 100) {
-                            chatInputArea.style.transform = `translateY(-${keyboardHeight}px)`;
-                            chatMessages.style.paddingBottom = (keyboardHeight + 70) + 'px';
-                            setTimeout(() => {
-                                chatMessages.scrollTop = chatMessages.scrollHeight;
-                            }, 100);
-                        } else {
-                            chatInputArea.style.transform = 'translateY(0)';
-                            chatMessages.style.paddingBottom = '15px';
-                        }
+                        // 确保滚动到底部
+                        setTimeout(() => {
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        }, 50);
                     }
-                });
+                };
+
+                window.visualViewport.addEventListener('resize', handleResize);
+                // 有些浏览器在键盘弹出时也会触发 scroll
+                window.visualViewport.addEventListener('scroll', handleResize);
             }
-            
-            chatInput.addEventListener('focus', () => {
-                setTimeout(() => {
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }, 300);
-            });
-            
-            chatInput.addEventListener('blur', () => {
-                chatInputArea.style.transform = 'translateY(0)';
-                chatMessages.style.paddingBottom = '15px';
-            });
         }
 
         // ================= PWA安装功能 =================
@@ -2942,8 +2929,15 @@
         }
 
         function openCharacterSettings() {
+            isCreatingNewCharacter = false;
+            tempNewCharacter = null;
+            
             const char = appData.characters.find(c => c.id === appData.currentCharacterId);
             if (!char) return;
+            
+            // 显示删除按钮
+            const deleteBtn = document.querySelector('#character-edit-modal .header-right .header-btn');
+            if (deleteBtn) deleteBtn.style.display = 'block';
             
             loadCharacterToForm(char);
             document.getElementById('character-edit-title').textContent = (char.nickname || char.name || '角色') + ' - 设置';
@@ -2952,6 +2946,7 @@
         }
 
         function createNewCharacter() {
+            isCreatingNewCharacter = true;
             const newChar = {
                 id: generateId(),
                 name: '',
@@ -2979,9 +2974,12 @@
                 summaries: []
             };
             
-            appData.characters.push(newChar);
+            tempNewCharacter = newChar;
             appData.currentCharacterId = newChar.id;
-            saveAppData();
+            
+            // 隐藏删除按钮
+            const deleteBtn = document.querySelector('#character-edit-modal .header-right .header-btn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
             
             loadCharacterToForm(newChar);
             document.getElementById('character-edit-title').textContent = '创建角色';
@@ -3031,15 +3029,67 @@
         }
 
         function saveCharacter() {
+            // 获取表单数据
+            const nickname = document.getElementById('char-nickname').value;
+            const name = document.getElementById('char-name').value;
+            const persona = document.getElementById('char-persona').value;
+            
+            // 如果是新建角色，检查人设是否为空
+            if (isCreatingNewCharacter) {
+                if (!persona.trim()) {
+                    alert('请填写角色人设！');
+                    return;
+                }
+                
+                // 将临时角色添加到列表
+                const char = tempNewCharacter;
+                char.nickname = nickname;
+                char.name = name;
+                char.persona = persona;
+                
+                char.userNickname = document.getElementById('user-nickname').value;
+                char.userName = document.getElementById('user-name').value;
+                char.userPersona = document.getElementById('user-persona').value;
+                
+                char.worldbookId = document.getElementById('char-worldbook').value;
+                char.memoryCount = parseInt(document.getElementById('memory-count').value) || 50;
+                
+                char.autoSummary = document.getElementById('auto-summary-switch').checked;
+                char.summaryInterval = parseInt(document.getElementById('summary-interval').value) || 100;
+                char.summaryPrompt = document.getElementById('summary-prompt').value;
+                
+                char.timeAware = document.getElementById('time-aware-switch').checked;
+                char.timezone = document.getElementById('timezone-select').value;
+                
+                char.weatherAware = document.getElementById('weather-aware-switch').checked;
+                char.weather = document.getElementById('weather-input').value;
+                
+                char.offlineMode = document.getElementById('offline-mode-switch').checked;
+                char.offlineLength = parseInt(document.getElementById('offline-length').value) || 1000;
+                
+                char.fontSize = parseInt(document.getElementById('font-size-range').value) || 14;
+                char.chatBg = document.getElementById('chat-bg-url').value;
+                
+                appData.characters.push(char);
+                isCreatingNewCharacter = false;
+                tempNewCharacter = null;
+                
+                saveAppData();
+                alert('角色创建成功！');
+                closeCharacterEdit();
+                return;
+            }
+
+            // 编辑现有角色
             const charId = appData.currentCharacterId;
             const charIndex = appData.characters.findIndex(c => c.id === charId);
             if (charIndex === -1) return;
             
             const char = appData.characters[charIndex];
             
-            char.nickname = document.getElementById('char-nickname').value;
-            char.name = document.getElementById('char-name').value;
-            char.persona = document.getElementById('char-persona').value;
+            char.nickname = nickname;
+            char.name = name;
+            char.persona = persona;
             
             char.userNickname = document.getElementById('user-nickname').value;
             char.userName = document.getElementById('user-name').value;
@@ -3089,6 +3139,16 @@
 
         function closeCharacterEdit() {
             closeModal('character-edit-modal');
+            
+            if (isCreatingNewCharacter) {
+                isCreatingNewCharacter = false;
+                tempNewCharacter = null;
+                appData.currentCharacterId = null;
+                renderCharacterList();
+                openModal('character-modal');
+                return;
+            }
+
             const char = appData.characters.find(c => c.id === appData.currentCharacterId);
             if (char) {
                 openChatWithCharacter(char.id);
@@ -3273,17 +3333,30 @@
                 
                 if (type === 'char') {
                     document.getElementById('char-avatar-preview').src = dataUrl;
-                    const char = appData.characters.find(c => c.id === appData.currentCharacterId);
-                    if (char) char.avatar = dataUrl;
+                    if (isCreatingNewCharacter && tempNewCharacter) {
+                        tempNewCharacter.avatar = dataUrl;
+                    } else {
+                        const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+                        if (char) {
+                            char.avatar = dataUrl;
+                            saveAppData();
+                        }
+                    }
                 } else {
                     document.getElementById('user-avatar-preview').src = dataUrl;
-                    const char = appData.characters.find(c => c.id === appData.currentCharacterId);
-                    if (char) char.userAvatar = dataUrl;
+                    if (isCreatingNewCharacter && tempNewCharacter) {
+                        tempNewCharacter.userAvatar = dataUrl;
+                    } else {
+                        const char = appData.characters.find(c => c.id === appData.currentCharacterId);
+                        if (char) {
+                            char.userAvatar = dataUrl;
+                            saveAppData();
+                        }
+                    }
                 }
-                
-                saveAppData();
             } catch (e) {
                 alert('上传失败');
+                console.error(e);
             }
             
             event.target.value = '';
@@ -3507,7 +3580,7 @@
         }
 
         function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML.replace(/\n/g, '<br>'); }
-        function escapeAttr(text) { return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+        function escapeAttr(text) { return text.replace(/"/g, '"').replace(/'/g, '&#39;'); }
 
         function sendMessage() {
             const input = document.getElementById('chat-input');
@@ -3592,7 +3665,7 @@
             if (char.persona) systemPrompt += `【角色设定】\n${char.persona}\n\n`;
             if (char.scenario) systemPrompt += `【场景】\n${char.scenario}\n\n`;
             if (char.userName || char.userPersona) { systemPrompt += `【用户信息】\n`; if (char.userName) systemPrompt += `用户名：${char.userName}\n`; if (char.userNickname) systemPrompt += `用户希望被称为：${char.userNickname}\n`; if (char.userPersona) systemPrompt += `用户设定：${char.userPersona}\n`; systemPrompt += '\n'; }
-            if (char.worldbookId) { const wb = appData.worldbooks.find(w => w.id === char.worldbookId); if (wb && wb.entries && wb.entries.length > 0) { const recentText = (char.chatHistory || []).slice(-10).map(m => m.content).join(' ').toLowerCase(); const matchedEntries = wb.entries.filter(e => { if (!e.keywords) return false; const keywords = e.keywords.split(',').map(k => k.trim().toLowerCase()); return keywords.some(k => k && recentText.includes(k)); }); const baseEntries = wb.entries.slice(0, 3); const allEntries = [...new Set([...matchedEntries, ...baseEntries])]; if (allEntries.length > 0) { systemPrompt += `【世界背景】\n`; allEntries.forEach(e => { if (e.content) systemPrompt += `${e.content}\n`; }); systemPrompt += '\n'; } } }
+            if (char.worldbookId) { const wb = appData.worldbooks.find(w => w.id === char.worldbookId); if (wb && wb.entries && wb.entries.length > 0) { const recentText = (char.chatHistory || []).slice(-10).map(m => m.content).join(' ').toLowerCase(); const matchedEntries = wb.entries.filter(e => { if (!e.keywords) return false; let keywords = []; if (typeof e.keywords === 'string') { keywords = e.keywords.split(/[,，]/); } else if (Array.isArray(e.keywords)) { keywords = e.keywords; } keywords = keywords.map(k => String(k).trim().toLowerCase()); return keywords.some(k => k && recentText.includes(k)); }); const baseEntries = wb.entries.slice(0, 3); const allEntries = [...new Set([...matchedEntries, ...baseEntries])]; if (allEntries.length > 0) { systemPrompt += `【世界背景】\n`; allEntries.forEach(e => { if (e.content) systemPrompt += `${e.content}\n`; }); systemPrompt += '\n'; } } }
             if (char.summaries && char.summaries.length > 0) { systemPrompt += `【之前的对话总结】\n`; char.summaries.slice(-3).forEach(s => systemPrompt += `- ${s}\n`); systemPrompt += '\n'; }
             if (char.timeAware) { const now = new Date().toLocaleString('zh-CN', { timeZone: char.timezone, year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', hour: '2-digit', minute: '2-digit' }); systemPrompt += `【当前时间】${now}\n`; }
             if (char.weatherAware && char.weather) systemPrompt += `【当前天气】${char.weather}\n`;
@@ -3794,6 +3867,15 @@
 
         // 初始化
         loadAppData();
+        
+        // Service Worker 注册
+        if ('serviceWorker' in navigator) {
+           window.addEventListener('load', () => {
+               navigator.serviceWorker.register('sw.js')
+                   .then(registration => console.log('SW registered'))
+                   .catch(err => console.log('SW failed', err));
+           });
+        }
     </script>
 </body>
 </html>
